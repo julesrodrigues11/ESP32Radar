@@ -1,18 +1,36 @@
 #include "DFRobot_C4001.h"
 
-uint8_t RadarAddress = 0x2A;
+const uint8_t RadarAddress = 0x2A;
 
 DFRobot_C4001_I2C radar(&Wire, RadarAddress);
 
-void printConfigParams();
+float Distance = 0.0f;
 
+// Function to print to Monitor the Configuration Parameters
+// Meant to debug and verify that the sensor is working as expected
+void printConfigParams()
+{
+    Serial.print("Min Range = ");
+    Serial.println(radar.getTMinRange());
+
+    Serial.print("Max Range = ");
+    Serial.println(radar.getTMaxRange());
+
+    Serial.print("Threshold Range = ");
+    Serial.println(radar.getThresRange());
+
+    Serial.print("Fretting Detection = ");
+    Serial.println(radar.getFrettingDetection());
+}
+
+// Function to scan for devices attached to the I2C bus
 void Scanner()
 {
     Serial.println();
     Serial.println("I2C scanner. Scanning ....");
 
     byte count = 0;
-    Wire.begin(SDA, SCL);
+    //Wire.begin(SDA, SCL); // This line can be omitted on boards other than the esp32c6
     for (byte i = 8; i < 120; i++)
     {
         Wire.beginTransmission(i);
@@ -31,14 +49,12 @@ void Scanner()
     Serial.print(" device(s).");
 }
 
-
+// Setup Function - Initialises Serial and C4001 Presence Sensor
 void setup()
 {
     Serial.begin(115200);
     delay(2500);
     Serial.println("Initialised");
-
-    Wire.begin(SDA, SCL);
 
     while(!radar.begin())
     {
@@ -47,92 +63,62 @@ void setup()
     }
     Serial.println("Radar Found!");
 
-    // Exist Mode
-    radar.setSensorMode(eExitMode);
+    // Speed Mode - To get object speed and distance from sensor
+    radar.setSensorMode(eSpeedMode);
 
     sSensorStatus_t data;
     data = radar.getStatus();
 
-    // 0 stop 1 start
+    // 0 to indicate Stop, 1 to indicate Start
     Serial.print("Work status = ");
     Serial.println(data.workStatus);
 
-    // 0 is exist 1 speed
+    // 0 for Exist Mode, 1 for Speed Mode
     Serial.print("Work mode = ");
     Serial.println(data.workMode);
 
-    // 0 Uninitialised 1 Initialised
+    // 0 Uninitialised, 1 Initialised
     Serial.print("Init status = ");
     Serial.println(data.initStatus);
     Serial.println();
 
-    // Minimum Detection Range - Minimum Distance, Unit cm, Range 0.3~25m (30~2500), not exceeding max, otherwise the function is abnormal
-    // Maximum Detection Range - Maximum Distance, Unit cm, Range 2.4~25m (240~2500)
-    // Trig Detection Range - Maximum Distance, Unit cm, Default trig = max
-    if(radar.setDetectionRange(/*Min*/30, /*Max*/200, /*Trig*/200))
+    // To Set Detection Threshold
+    // min The Minimum Distance for Detection Range, Unit cm, Range 0.3~20m (30~2500), must not exceed max
+    // max The Maximum Distance for Detection Range, Unit cm, Range 2.4~20m (240~2500)
+    // thres The Target Detection Threshold, Dimensionless unit 0.1, Range 0~6553.5 (0~65535)
+    // radar.setDetectThres(min, max, thres)
+    if(radar.setDetectThres(30, 500, 10))
     {
-        Serial.println("Detection range set successfully");
+        Serial.println("Detection Threshold set successfully");
     }
 
-    // Set Trigger Sensitivity 0 - 9
-    if(radar.setTrigSensitivity(1))
-    {
-        Serial.println("Trig sensitivity set successfully");
-    }
+    // Set Fretting Detection
+    radar.setFrettingDetection(eON);
 
-    // Set Keep Sensitivity 0 - 9
-    if(radar.setKeepSensitivity(2))
-    {
-        Serial.println("Keep sensitivity set successfully");
-    }
-
-    // trig Trigger delay, Unit 0.01s, Range 0~2s (0~200)
-    // keep Maintain the detection timeout, Unit 0.5s, Range 2~1500s (4~3000)
-    if(radar.setDelay(/*trig*/100, /*keep*/4))
-    {
-        Serial.println("Delay set successfully");
-    }
-
-    // Get Config Params
+    // Print Configuration Params
     printConfigParams();
 }
 
-void printConfigParams()
-{
-    Serial.println();
-    Serial.print("Trig Sensitivity = ");
-    Serial.println(radar.getTrigSensitivity());
-
-    Serial.print("Keep Sensitivity = ");
-    Serial.println(radar.getKeepSensitivity());
-
-    Serial.print("Min Range = ");
-    Serial.println(radar.getMinRange());
-
-    Serial.print("Max Range = ");
-    Serial.println(radar.getMaxRange());
-
-    Serial.print("Trig Range = ");
-    Serial.println(radar.getTrigRange());
-
-    Serial.print("Keep Time = ");
-    Serial.println(radar.getKeepTimerout());
-
-    Serial.print("Trig Delay = ");
-    Serial.println(radar.getTrigDelay());
-
-}
-
+// Loop Function - Gets object distance from sensor, parses it accordingly
 void loop()
 {
-  // Determine whether the object is moving
-  if(radar.motionDetection()){
-    Serial.println("Motion Detected");
-    Serial.println();
-  }
-  else
-  {
-    Serial.println("Sleep");
-  }
-  delay(1000);
+    // Important line, radar will not get target distance from sensor otherwise
+    radar.getTargetNumber();
+
+    Distance = radar.getTargetRange();
+    if (Distance < 5.0f && Distance >= 3.0f)
+    {
+        Serial.print("Cold - ");
+    }
+    else if (Distance < 3.0f && Distance >= 1.0f)
+    {
+        Serial.print("Lukewarm - ");
+    }
+    else if (Distance < 1.0f)
+    {
+        Serial.print("Hot - ");
+    }
+    Serial.println(Distance);
+
+    delay(1000);
 }
