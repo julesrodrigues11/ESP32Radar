@@ -1,10 +1,35 @@
+#define THINGSBOARD_ENABLE_PROGMEM 0
+
+#include "WiFiCredentials.cpp"
+#include "WiFi.h"
+#include "Arduino_MQTT_Client.h"
+#include "Update.h"
+#include "ThingsBoard.h"
 #include "DFRobot_C4001.h"
 
+#pragma region THINGSBOARD VARIABLES
+// Access Token
+#define TOKEN "LjzVhXC9KWtOyNp9XJQQ"
+
+// Thingsboard Server
+#define THINGSBOARD_SERVER "18.130.204.215"
+
+WiFiClient espClient;
+Arduino_MQTT_Client client(espClient);
+
+ThingsBoard tb(client);
+#pragma endregion
+
+#pragma region SENSOR VARIABLES
 const uint8_t RadarAddress = 0x2A;
 
 DFRobot_C4001_I2C radar(&Wire, RadarAddress);
 
 float Distance = 0.0f;
+#pragma endregion
+
+// the Wifi radio's status
+int status = WL_IDLE_STATUS;
 
 // Function to print to Monitor the Configuration Parameters
 // Meant to debug and verify that the sensor is working as expected
@@ -49,12 +74,51 @@ void Scanner()
     Serial.print(" device(s).");
 }
 
-// Setup Function - Initialises Serial and C4001 Presence Sensor
+// Function to Initialise WiFi
+// Initialises connection based on the WiFi AP Name and Password provided
+void InitWiFi()
+{
+    Serial.print("Connecting to AP ...");
+    // Attempt to connect to WiFi networki
+
+    WiFi.begin(WIFI_AP_NAME, WIFI_PASSWORD);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(".");
+    }
+    Serial.println("Connected to AP");
+    digitalWrite(LED_BUILTIN, HIGH);
+
+}
+
+// Function to reconnect to WiFi if connection ever drops
+void reconnect()
+{
+  // Loop until we're reconnected
+  status = WiFi.status();
+  if ( status != WL_CONNECTED) {
+    WiFi.begin(WIFI_AP_NAME, WIFI_PASSWORD);
+    while (WiFi.status() != WL_CONNECTED) {
+      delay(500);
+      Serial.print(".");
+    }
+    Serial.println("Connected to AP");
+  }
+}
+
+// Setup Function - Initialises Serial, WiFi and C4001 Presence Sensor
 void setup()
 {
     Serial.begin(115200);
     delay(2500);
     Serial.println("Initialised");
+
+    // Initialise LED for debugging purposes
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, LOW);
+
+    WiFi.begin(WIFI_AP_NAME, WIFI_PASSWORD);
+    InitWiFi();
 
     while(!radar.begin())
     {
@@ -97,28 +161,49 @@ void setup()
 
     // Print Configuration Params
     printConfigParams();
+
 }
 
-// Loop Function - Gets object distance from sensor, parses it accordingly
+// Loop Function
+// Checks WiFi connection and reconnects if necessary
+// Checks ThingsBoard connection and reconnects if necessary
+// Gets Distance Value from Presence Detection Sensor, and uploads them to ThingsBoard
 void loop()
 {
+      // Reconnect to WiFi, if needed
+    if (WiFi.status() != WL_CONNECTED)
+    {
+        pinMode(LED_BUILTIN, LOW);
+        reconnect();
+        return;
+    }
+
+    // Reconnect to ThingsBoard, if needed
+    if (!tb.connected()) {
+
+        // Connect to the ThingsBoard
+        Serial.print("Connecting to: ");
+        Serial.print(THINGSBOARD_SERVER);
+        Serial.print(" with token ");
+        Serial.println(TOKEN);
+        if (!tb.connect(THINGSBOARD_SERVER, TOKEN))
+        {
+            Serial.println("Failed to connect");
+            return;
+        }
+        Serial.println("Connection successful!");
+    }
+
     // Important line, radar will not get target distance from sensor otherwise
     radar.getTargetNumber();
 
     Distance = radar.getTargetRange();
-    if (Distance < 5.0f && Distance >= 3.0f)
-    {
-        Serial.print("Cold - ");
-    }
-    else if (Distance < 3.0f && Distance >= 1.0f)
-    {
-        Serial.print("Lukewarm - ");
-    }
-    else if (Distance < 1.0f)
-    {
-        Serial.print("Hot - ");
-    }
+    Serial.print("Sending data to Thingsboard - ");
     Serial.println(Distance);
 
-    delay(1000);
+    tb.sendTelemetryData("Distance", Distance);
+
+    tb.loop();
+    
+    delay(30);
 }
