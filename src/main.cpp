@@ -1,4 +1,5 @@
 #define THINGSBOARD_ENABLE_PROGMEM 0
+#define THINGSBOARD_ENABLE_DEBUG 1
 
 #include "WiFiCredentials.cpp"
 #include "WiFi.h"
@@ -7,12 +8,15 @@
 #include "ThingsBoard.h"
 #include "DFRobot_C4001.h"
 
+#include <cstring>
+
 #pragma region THINGSBOARD VARIABLES
+
 // Access Token
-#define TOKEN "LjzVhXC9KWtOyNp9XJQQ"
+#define TOKEN "ari6coh7jcfTJyHq0QoD"
 
 // Thingsboard Server
-#define THINGSBOARD_SERVER "18.130.204.215"
+#define THINGSBOARD_SERVER "52.56.195.105"
 
 WiFiClient espClient;
 Arduino_MQTT_Client client(espClient);
@@ -28,8 +32,29 @@ DFRobot_C4001_I2C radar(&Wire, RadarAddress);
 float Distance = 0.0f;
 #pragma endregion
 
+#pragma region SMOOTHING VARIABLES
+float ewmaAlpha = 0.1f;
+float ewma = 0.0f;
+#pragma endregion
+
 // the Wifi radio's status
 int status = WL_IDLE_STATUS;
+
+// Function to obtain JSON string from the data values provided
+// Appends the static values to the JSON string value and then returns it
+// The data values need to be converted into strings to facilitate appending
+std::string GetJsonString(int distance, int smoothedDistance)
+{
+    std::string jsonString = "";
+
+    jsonString.append("{Distance:");
+    jsonString.append(std::to_string(distance));
+    jsonString.append(",SmoothedDistance:");
+    jsonString.append(std::to_string(smoothedDistance));
+    jsonString.append("}");
+
+    return jsonString;
+}
 
 // Function to print to Monitor the Configuration Parameters
 // Meant to debug and verify that the sensor is working as expected
@@ -197,13 +222,28 @@ void loop()
     // Important line, radar will not get target distance from sensor otherwise
     radar.getTargetNumber();
 
+    // Get Distance Value from Radar
     Distance = radar.getTargetRange();
-    Serial.print("Sending data to Thingsboard - ");
-    Serial.println(Distance);
+    int DistanceInCM = Distance * 100;
 
-    tb.sendTelemetryData("Distance", Distance);
+    // Apply Smoothing to Distance Value obtained
+    ewma = (ewmaAlpha * Distance) + (1 - ewmaAlpha) * ewma;
+    int EWMAInCM = ewma * 100;
+    
+    // Obtain JSON string and upload to Thingsboard
+    std::string jsonString = GetJsonString(DistanceInCM, EWMAInCM);
+
+    if(tb.sendTelemetryJson(jsonString.c_str()))
+    {
+        Serial.print("Sent object - ");
+    }
+    else
+    {
+        Serial.println("Failed");
+    }
+    Serial.println(jsonString.c_str());
 
     tb.loop();
     
-    delay(30);
+    delay(100);
 }
