@@ -8,8 +8,6 @@
 #include "ThingsBoard.h"
 #include "DFRobot_C4001.h"
 
-#include <cstring>
-
 #pragma region THINGSBOARD VARIABLES
 
 // Access Token
