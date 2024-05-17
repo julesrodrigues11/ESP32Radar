@@ -43,6 +43,10 @@ float ewma_R1 = 0.0f;
 float ewma_R2 = 0.0f;
 #pragma endregion
 
+#pragma region I2C VARIABLES
+#define SLAVE_ADDRESS 13
+#pragma endregion
+
 // the Wifi radio's status
 int status = WL_IDLE_STATUS;
 
@@ -66,6 +70,22 @@ std::string GetJsonString(int distance, int smoothedDistance)
 int MapValue(int value)
 {
     return map(value, MIN_RANGE, MAX_RANGE, 1, 1000);
+}
+
+// Function to Transfer Data over I2C on selected address
+// Compares the two values and transfers the lower value
+void TransferData(int radarRead1, int radarRead2)
+{
+    Wire.beginTransmission(SLAVE_ADDRESS);
+    if(radarRead1 <= radarRead2)
+    {
+        Wire.write(radarRead1);
+    }
+    else
+    {
+        Wire.write(radarRead2);
+    }
+    Wire.endTransmission();
 }
 
 // Function to print to Monitor the Configuration Parameters
@@ -270,17 +290,8 @@ void loop()
     // Send Telemetry Data to Thingsboard
     tb.sendTelemetryData("Radar1_Dist", sdR1InCM);
     tb.sendTelemetryData("Radar2_Dist", sdR2InCM);
-
-    /*
-    if(tb.sendTelemetryJson(jsonString.c_str()))
-    {
-        Serial.print("Sent object - ");
-    }
-    else
-    {
-        Serial.println("Failed");
-    }
-    */
+    
+    TransferData(sdR1InCM, sdR2InCM);
 
     tb.loop();
     
