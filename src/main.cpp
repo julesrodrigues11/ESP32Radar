@@ -116,7 +116,7 @@ void Scanner()
 void InitWiFi()
 {
     Serial.print("Connecting to AP ...");
-    // Attempt to connect to WiFi networki
+    // Attempt to connect to WiFi network
 
     WiFi.begin(WIFI_AP_NAME, WIFI_PASSWORD);
     while (WiFi.status() != WL_CONNECTED) {
