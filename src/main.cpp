@@ -1,5 +1,5 @@
 #define THINGSBOARD_ENABLE_PROGMEM 0
-#define THINGSBOARD_ENABLE_DEBUG 1
+//#define THINGSBOARD_ENABLE_DEBUG 1
 
 #include "WiFiCredentials.cpp"
 #include "WiFi.h"
@@ -69,7 +69,11 @@ std::string GetJsonString(int distance, int smoothedDistance)
 // Function to map value from provided range to fall within the range of 1 to 1000
 int MapValue(int value)
 {
-    return map(value, MIN_RANGE, MAX_RANGE, 1, 1000);
+    int mappedValue = map(value, MIN_RANGE, MAX_RANGE, 1, 1000);
+    if (mappedValue < 1 || mappedValue > 1000)
+        return 1000;
+    else
+        return mappedValue;
 }
 
 // Function to Transfer Data over I2C on selected address
