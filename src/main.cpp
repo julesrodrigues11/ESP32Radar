@@ -25,7 +25,7 @@ ThingsBoard tb(client);
 #pragma region SENSOR VARIABLES
 
 const int MIN_RANGE = 30;
-const int MAX_RANGE = 500;
+const int MAX_RANGE = 300;
 
 const uint8_t RadarAddress_1 = 0x2A;
 const uint8_t RadarAddress_2 = 0x2B;
@@ -35,6 +35,10 @@ DFRobot_C4001_I2C Radar2(&Wire, RadarAddress_2);
 
 float Distance_R1 = 0.0f;
 float Distance_R2 = 0.0f;
+
+int R1_Data = 0;
+int R2_Data = 0;
+
 #pragma endregion
 
 #pragma region SMOOTHING VARIABLES
@@ -44,7 +48,7 @@ float ewma_R2 = 0.0f;
 #pragma endregion
 
 #pragma region I2C VARIABLES
-#define SLAVE_ADDRESS 13
+#define SLAVE_ADDRESS 8
 #pragma endregion
 
 // the Wifi radio's status
@@ -264,38 +268,47 @@ void loop()
 
     #pragma region RADAR_1
     //Important line, radar will not get target distance from sensor otherwise
-    Radar1.getTargetNumber();
+    if(Radar1.getTargetNumber() >= 1)
+    {
+        // Get Distance Value from Radar 1
+        Distance_R1 = Radar1.getTargetRange();
+        
+        // Apply Smoothing to Distance Value obtained
+        ewma_R1 = (ewmaAlpha * Distance_R1) + (1 - ewmaAlpha) * ewma_R1;
+        R1_Data = MapValue(ewma_R1 * 100);
+    }
+    else
+    {
+        R1_Data = 1000;
+    }
 
-    // Get Distance Value from Radar 1
-    Distance_R1 = Radar1.getTargetRange();
-    int DR1InCM = Distance_R1 * 100;
-
-    // Apply Smoothing to Distance Value obtained
-    ewma_R1 = (ewmaAlpha * Distance_R1) + (1 - ewmaAlpha) * ewma_R1;
-    int sdR1InCM = MapValue(ewma_R1 * 100);
     #pragma endregion
 
     #pragma region RADAR_2
     //Important line, radar will not get target distance from sensor otherwise
-    Radar2.getTargetNumber();
+    if(Radar2.getTargetNumber())
+    {
+        // Get Distance Value from Radar 2
+        Distance_R2 = Radar2.getTargetRange();
+        int DR2InCM = Distance_R2 * 100;
 
-    // Get Distance Value from Radar 2
-    Distance_R2 = Radar2.getTargetRange();
-    int DR2InCM = Distance_R2 * 100;
+        //Apply Smoothing to Distance Value obtained
+        ewma_R2 = (ewmaAlpha * Distance_R2) + (1 - ewmaAlpha) * ewma_R2;
+        R2_Data = MapValue(ewma_R2 * 100);
 
-    //Apply Smoothing to Distance Value obtained
-    ewma_R2 = (ewmaAlpha * Distance_R2) + (1 - ewmaAlpha) * ewma_R2;
-    int sdR2InCM = MapValue(ewma_R2 * 100);
-    #pragma endregion
+    }
+    else
+    {
+        R2_Data = 1000;
+    }
+    Serial.print(R1_Data);
+    Serial.print(",");
+    Serial.println(R2_Data);
 
-    std::string jsonString = GetJsonString(sdR1InCM, sdR2InCM);
-    Serial.println(jsonString.c_str());
-
-    // Send Telemetry Data to Thingsboard
-    tb.sendTelemetryData("Radar1_Dist", sdR1InCM);
-    tb.sendTelemetryData("Radar2_Dist", sdR2InCM);
+    tb.sendTelemetryData("Radar1_Dist", R1_Data);
+    tb.sendTelemetryData("Radar2_Dist", R2_Data);
     
-    TransferData(sdR1InCM, sdR2InCM);
+    TransferData(R1_Data, R2_Data);
 
     tb.loop();
     
