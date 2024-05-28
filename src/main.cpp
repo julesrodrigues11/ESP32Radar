@@ -1,5 +1,5 @@
 #define THINGSBOARD_ENABLE_PROGMEM 0
-//#define THINGSBOARD_ENABLE_DEBUG 1
+//#define THINGSBOARD_ENABLE_DEBUG 1 // Uncomment this line for Thingsboard debugging
 
 #include "WiFiCredentials.cpp"
 #include "WiFi.h"
@@ -10,7 +10,7 @@
 
 #pragma region THINGSBOARD VARIABLES
 
-// Access Token
+// Access Token - To change depending upon device
 #define TOKEN "ari6coh7jcfTJyHq0QoD"
 
 // Thingsboard Server
@@ -51,6 +51,11 @@ float ewma_R2 = 0.0f;
 #define SLAVE_ADDRESS 8
 #pragma endregion
 
+#pragma region OTHER VARIABLES
+#define MIN_NORM 1
+#define MAX_NORM 100
+#pragma endregion
+
 // the Wifi radio's status
 int status = WL_IDLE_STATUS;
 
@@ -70,12 +75,12 @@ std::string GetJsonString(int distance, int smoothedDistance)
     return jsonString;
 }
 
-// Function to map value from provided range to fall within the range of 1 to 1000
+// Function to map value from provided range to fall within the range of 1 to 100
 int MapValue(int value)
 {
-    int mappedValue = map(value, MIN_RANGE, MAX_RANGE, 1, 1000);
-    if (mappedValue < 1 || mappedValue > 1000)
-        return 1000;
+    int mappedValue = map(value, MIN_RANGE, MAX_RANGE, MIN_NORM, MAX_NORM);
+    if (mappedValue < MIN_NORM || mappedValue > MAX_NORM)
+        return MAX_NORM;
     else
         return mappedValue;
 }
@@ -84,16 +89,16 @@ int MapValue(int value)
 // Compares the two values and transfers the lower value
 void TransferData(int radarRead1, int radarRead2)
 {
-    Wire.beginTransmission(SLAVE_ADDRESS);
+    Wire1.beginTransmission(SLAVE_ADDRESS);
     if(radarRead1 <= radarRead2)
     {
-        Wire.write(radarRead1);
+        Wire1.write(radarRead1);
     }
     else
     {
-        Wire.write(radarRead2);
+        Wire1.write(radarRead2);
     }
-    Wire.endTransmission();
+    Wire1.endTransmission();
 }
 
 // Function to print to Monitor the Configuration Parameters
@@ -215,7 +220,7 @@ void InitialiseRadar(DFRobot_C4001_I2C radar)
     radar.setFrettingDetection(eON);
 
     // Print Configuration Params
-    printConfigParams(radar);
+    // printConfigParams(radar);
 }
 
 // Setup Function - Initialises Serial, WiFi and C4001 Presence Sensors 1 and 2
@@ -224,6 +229,9 @@ void setup()
     Serial.begin(115200);
     delay(2500);
     Serial.println("Initialised");
+
+    // Initialise Wire1 on pins D2 and D3
+    Wire1.begin(D2, D3);
 
     // Initialise LED for debugging purposes
     pinMode(LED_BUILTIN, OUTPUT);
@@ -279,7 +287,7 @@ void loop()
     }
     else
     {
-        R1_Data = 1000;
+        R1_Data = MAX_NORM;
     }
 
     #pragma endregion
@@ -290,7 +298,6 @@ void loop()
     {
         // Get Distance Value from Radar 2
         Distance_R2 = Radar2.getTargetRange();
-        int DR2InCM = Distance_R2 * 100;
 
         //Apply Smoothing to Distance Value obtained
         ewma_R2 = (ewmaAlpha * Distance_R2) + (1 - ewmaAlpha) * ewma_R2;
@@ -299,18 +306,17 @@ void loop()
     }
     else
     {
-        R2_Data = 1000;
+        R2_Data = MAX_NORM;
     }
-    Serial.print(R1_Data);
-    Serial.print(",");
-    Serial.println(R2_Data);
+
+    #pragma endregion
 
     tb.sendTelemetryData("Radar1_Dist", R1_Data);
     tb.sendTelemetryData("Radar2_Dist", R2_Data);
-    
+
     TransferData(R1_Data, R2_Data);
 
     tb.loop();
     
-    delay(100);
+    delay(200);
 }
