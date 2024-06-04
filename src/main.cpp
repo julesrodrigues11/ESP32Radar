@@ -231,17 +231,17 @@ void setup()
     Serial.println("Initialised");
 
     // Initialise Wire1 on pins D2 and D3
-    Wire1.begin(D2, D3);
+    //Wire1.begin(D2, D3);
 
     // Initialise LED for debugging purposes
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, LOW);
 
-    WiFi.begin(WIFI_AP_NAME, WIFI_PASSWORD);
-    InitWiFi();
+    //WiFi.begin(WIFI_AP_NAME, WIFI_PASSWORD);
+    //InitWiFi();
 
-    InitialiseRadar(Radar1);
-    InitialiseRadar(Radar2);
+    //InitialiseRadar(Radar1);
+    //InitialiseRadar(Radar2);
 }
 
 // Loop Function
@@ -250,6 +250,7 @@ void setup()
 // Gets Distance Value from Presence Detection Sensor, and uploads them to ThingsBoard
 void loop()
 {
+    /*
     // Reconnect to WiFi, if needed
     if (WiFi.status() != WL_CONNECTED)
     {
@@ -319,4 +320,7 @@ void loop()
     tb.loop();
     
     delay(200);
+    */
+    Scanner();
+    delay(1500);
 }
